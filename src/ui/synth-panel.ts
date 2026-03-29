@@ -15,6 +15,7 @@ interface ParamDef {
 }
 
 const SD_SOUNDS = ['sawtooth', 'square', 'triangle', 'sine', 'supersaw', 'pulse', 'white', 'pink'];
+const SD_OSC2_SOUNDS = ['off', 'sawtooth', 'square', 'triangle', 'sine', 'pulse'];
 const CATEGORIES: PresetCategory[] = ['keys', 'bass', 'pad', 'lead', 'fx', 'orch'];
 
 const SD_ADSR: ParamDef[] = [
@@ -32,6 +33,8 @@ const SD_FILTER: ParamDef[] = [
 
 const SD_FX: ParamDef[] = [
   { key: 'distort', label: 'Dist', min: 0, max: 1, step: 0.01 },
+  { key: 'fuzz', label: 'Fuzz', min: 0, max: 1, step: 0.01 },
+  { key: 'wavefold', label: 'Fold', min: 0, max: 1, step: 0.01 },
   { key: 'crush', label: 'Crush', min: 0, max: 16, step: 1 },
   { key: 'delay', label: 'Dly', min: 0, max: 1, step: 0.01 },
   { key: 'delaytime', label: 'Time', min: 0, max: 1, step: 0.01 },
@@ -444,24 +447,101 @@ export function createSynthPanel(): HTMLElement {
     }
     content.appendChild(waveRow);
 
+    // OSC B waveform selector
+    const currentOsc2 = (params.s2 as string) ?? 'off';
+    const osc2Row = document.createElement('div');
+    osc2Row.className = 'flex gap-1 mb-1 flex-wrap items-center';
+    const osc2Label = document.createElement('span');
+    osc2Label.className = 'text-[9px] text-text-secondary/50 uppercase tracking-widest mr-0.5';
+    osc2Label.textContent = 'B';
+    osc2Row.appendChild(osc2Label);
+    for (const s of SD_OSC2_SOUNDS) {
+      const btn = document.createElement('button');
+      const short = s === 'sawtooth' ? 'saw' : s === 'triangle' ? 'tri' : s;
+      const active = s === currentOsc2 || (s === 'off' && !params.s2);
+      btn.className = active
+        ? 'px-1.5 py-1 text-[10px] rounded border bg-accent-purple/20 border-accent-purple text-accent-purple'
+        : 'px-1.5 py-1 text-[10px] rounded border border-border text-text-secondary hover:text-text-primary transition-colors';
+      if (s === 'off') {
+        btn.textContent = 'off';
+      } else {
+        btn.append(createWaveIcon(s), document.createTextNode(` ${short}`));
+      }
+      btn.addEventListener('click', () => {
+        if (s === 'off') {
+          const preset = getState().currentPreset;
+          if (!preset) return;
+          const p = { ...(preset.params as unknown as Record<string, unknown>) };
+          delete p.s2;
+          p.osc2mix = 0;
+          suppressRebuild = true;
+          setPreset({ ...preset, params: p as unknown as Preset['params'] });
+          suppressRebuild = false;
+          buildControls(); // rebuild to show/hide OSC B params
+        } else {
+          updateParam('s2', s);
+          if (!params.osc2mix || (params.osc2mix as number) === 0) {
+            updateParam('osc2mix', 0.5);
+          }
+          buildControls();
+        }
+      });
+      osc2Row.appendChild(btn);
+    }
+    content.appendChild(osc2Row);
+
     // Build param groups
     buildParamGroup('ADSR', SD_ADSR, params, accentClass);
-    buildParamGroup('Filter', SD_FILTER, params, accentClass);
+
+    // Filter + Filter Envelope
+    const filterParams: ParamDef[] = [
+      ...SD_FILTER,
+      { key: 'fenv', label: 'FEnv', min: 0, max: 10000, step: 1, log: true },
+      { key: 'fdecay', label: 'FDec', min: 0.01, max: 3, step: 0.01 },
+    ];
+    buildParamGroup('Filter', filterParams, params, accentClass);
+
+    // OSC params
     const oscParams: ParamDef[] = [{ key: 'gain', label: 'Vol', min: 0, max: 1, step: 0.01 }];
-    if (currentSound === 'supersaw') {
-      oscParams.push(
-        { key: 'unison', label: 'Uni', min: 1, max: 16, step: 1 },
-        { key: 'spread', label: 'Spr', min: 0, max: 1, step: 0.01 },
-        { key: 'detune', label: 'Det', min: 0, max: 1, step: 0.01 },
-      );
-    }
+    // Unison available for all waveforms (universal unison)
+    oscParams.push(
+      { key: 'unison', label: 'Uni', min: 1, max: 16, step: 1 },
+      { key: 'spread', label: 'Spr', min: 0, max: 1, step: 0.01 },
+      { key: 'detune', label: 'Det', min: 0, max: 1, step: 0.01 },
+    );
     if (currentSound === 'pulse') {
       oscParams.push({ key: 'pw', label: 'PW', min: 0, max: 1, step: 0.01 });
     }
+    oscParams.push({ key: 'sub', label: 'Sub', min: 0, max: 1, step: 0.01 });
+    // OSC B params (if active)
+    if (currentOsc2 !== 'off' && params.s2) {
+      oscParams.push(
+        { key: 'osc2mix', label: 'B Mix', min: 0, max: 1, step: 0.01 },
+        { key: 'osc2oct', label: 'B Oct', min: -2, max: 2, step: 1 },
+        { key: 'osc2detune', label: 'B Det', min: -100, max: 100, step: 1 },
+        { key: 'fm', label: 'FM', min: 0, max: 1, step: 0.01 },
+      );
+    }
     buildParamGroup('Osc', oscParams, params, accentClass);
+
     if (['sawtooth', 'square', 'supersaw', 'pulse'].includes(currentSound)) {
       buildVowelSelector(params);
     }
+
+    // Modulation: LFO + Vibrato + Tremolo + Chorus + Pitch Env + Glide
+    const modParams: ParamDef[] = [
+      { key: 'lfo', label: 'LFO', min: 0, max: 20, step: 0.1 },
+      { key: 'lfodepth', label: 'L.Dep', min: 0, max: 5000, step: 1, log: true },
+      { key: 'vibrato', label: 'Vib', min: 0, max: 50, step: 0.5 },
+      { key: 'tremolo', label: 'Trem', min: 0, max: 1, step: 0.01 },
+      { key: 'chorus', label: 'Chor', min: 0, max: 1, step: 0.01 },
+      { key: 'noise', label: 'Noise', min: 0, max: 1, step: 0.01 },
+      { key: 'penv', label: 'PEnv', min: -48, max: 48, step: 0.5 },
+      { key: 'pdecay', label: 'PDec', min: 0.01, max: 3, step: 0.01 },
+      { key: 'glide', label: 'Glide', min: 0, max: 1, step: 0.01 },
+    ];
+    buildParamGroup('Mod', modParams, params, accentClass);
+
     buildParamGroup('FX', SD_FX, params, accentClass);
   }
 
