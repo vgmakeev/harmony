@@ -1,5 +1,6 @@
 import { eventBus } from '../core/event-bus';
 import { setAudioReady } from '../core/state';
+import { setAudioContext as setSuperdoughCtx } from '@strudel/webaudio';
 
 let audioContext: AudioContext | null = null;
 let masterGain: GainNode | null = null;
@@ -28,6 +29,8 @@ export function getMasterGain(): GainNode {
 
 export async function initAudio(): Promise<AudioContext> {
   const ctx = getAudioContext();
+  // Share our AudioContext with superdough before anything creates nodes
+  setSuperdoughCtx(ctx);
   if (ctx.state === 'suspended') {
     await ctx.resume();
   }

@@ -1,5 +1,5 @@
 import { getState, setHarmonizer, setPreset, setArp, setBpm } from '../core/state';
-import { strudelEval, strudelStop } from '../strudel/strudel-engine';
+import { strudelEval, strudelStop, getStrudelCode, isStrudelPlaying } from '../strudel/strudel-engine';
 import { getAllPresets } from '../data/presets';
 import { getWafCatalog, findWafInstrument, WAF_CATEGORY_MAP } from '../data/waf-catalog';
 import type { Preset, WebAudioFontParams } from '../types';
@@ -22,18 +22,6 @@ interface AiResponse {
 
 let apiKey = localStorage.getItem('harmonia_gemini_key') ?? '';
 const history: ChatMessage[] = [];
-
-type ThinkingLevel = 'low' | 'medium' | 'high';
-let thinkingLevel: ThinkingLevel = (localStorage.getItem('harmonia_thinking_level') as ThinkingLevel) ?? 'medium';
-
-export function setThinkingLevel(level: ThinkingLevel): void {
-  thinkingLevel = level;
-  localStorage.setItem('harmonia_thinking_level', level);
-}
-
-export function getThinkingLevel(): ThinkingLevel {
-  return thinkingLevel;
-}
 
 export function setGeminiKey(key: string): void {
   apiKey = key;
@@ -73,15 +61,20 @@ function buildSystemPrompt(): string {
 
   return `You are Harmonia AI — the brain of a browser music workstation. You CONTROL the synthesizer through the "actions" array in your JSON response. If the user asks to change a sound, create a preset, play a pattern, or tweak any setting, you MUST include the corresponding actions. Never just describe what you would do — actually do it via actions.
 
+CRITICAL: You MUST ALWAYS respond with a JSON object in this exact format:
+{"message": "your text response here", "actions": [{"type": "actionType", ...}]}
+If no actions needed, use empty array: {"actions": []}
+Do NOT wrap the JSON in markdown code blocks. Do NOT include any text before or after the JSON object.
+
 You have access to Google Search. Use it when the user mentions a specific song, artist, or track to find relevant info (BPM, key, instruments, vibe) and then recreate that sound/vibe using the synth engine.
 
 CURRENT APP STATE:
-- Key: ${state.harmonizer.key}, Scale: ${state.harmonizer.scale}, Fifths: ${state.harmonizer.fifths ? 'ON' : 'OFF'}
-- Voicing: ${state.harmonizer.voicingMode}
+- Harmonizer: ${state.harmonizer.enabled ? 'ON' : 'OFF'}, Key: ${state.harmonizer.key}, Scale: ${state.harmonizer.scale}, Fifths: ${state.harmonizer.fifths ? 'ON' : 'OFF'}, Voicing: ${state.harmonizer.voicingMode}
 - BPM: ${state.bpm}
 - Preset: ${preset ? `${preset.name} (${preset.engine}, ${preset.category})` : 'none'}
-- Arpeggiator: ${state.arp.enabled ? 'ON' : 'OFF'}, Pattern: ${state.arp.pattern}, Div: 1/${state.arp.subdivision * 4}, Gate: ${state.arp.gate}
 ${paramsLine}
+- Arpeggiator: ${state.arp.enabled ? 'ON' : 'OFF'}, Pattern: ${state.arp.pattern}, Div: 1/${state.arp.subdivision * 4}, Gate: ${state.arp.gate}
+- Strudel: ${isStrudelPlaying() ? 'PLAYING' : 'stopped'}${getStrudelCode() ? `, Code: ${getStrudelCode()}` : ''}
 
 AVAILABLE PRESETS: ${presetList}
 
@@ -126,62 +119,116 @@ We have 2 engines:
    Use this when the user asks for realistic/acoustic instrument sounds (piano, guitar, brass, strings, woodwinds, etc.)
    NOTE: WAF instruments only support gain adjustment. No filter, delay, reverb, or distortion. For FX processing, use Strudel patterns instead.
 
-5) "strudel" — play a Strudel live-coding pattern. The code is evaluated by Strudel's REPL which uses Tidal/mini-notation. IMPORTANT: Use SINGLE QUOTES inside the code string to avoid JSON escaping issues.
+5) "strudel" — play a Strudel live-coding pattern. Strudel is a powerful cyclic pattern language (JS port of Tidal Cycles). Code is evaluated by its REPL.
+   IMPORTANT: Use SINGLE QUOTES inside the code string to avoid JSON escaping issues.
    {"type":"strudel","code":"note('c2 [~ c2] eb2 [~ g1]').sound('sawtooth').lpf(600)"}
 
-   STRUDEL MINI-NOTATION SYNTAX:
-   - Spaces separate events in a cycle: "c3 e3 g3" = 3 notes per cycle
-   - [brackets] group into one step: "c3 [e3 g3]" = c3 takes half, e3+g3 share the other half
-   - <angles> alternate each cycle: "<c3 e3 g3>" = c3 first cycle, e3 second, g3 third
-   - ~ is a rest/silence: "c3 ~ e3 ~" = note, rest, note, rest
-   - * repeats: "c3*4" = c3 four times
-   - / slows: "c3/2" = c3 every 2 cycles
-   - , stacks (polyphony): "c3 e3, g3 b3" = two layers playing simultaneously
-   - (k,n) euclidean rhythm: "c3(3,8)" = 3 hits distributed over 8 steps
+   ═══ MINI-NOTATION ═══
+   Spaces = events per cycle: 'c3 e3 g3' (3 notes/cycle)
+   [brackets] = subdivide: 'c3 [e3 g3]' (c3=half, e3+g3 share other half)
+   <angles> = alternate cycles: '<c3 e3 g3>' (one per cycle)
+   ~ = rest: 'c3 ~ e3 ~'
+   * = repeat: 'c3*4'
+   / = slow: 'c3/2' (every 2 cycles)
+   , = stack (polyphony): 'c3 e3, g3 b3' (two parallel layers)
+   (k,n) = euclidean: 'c3(3,8)' (3 hits over 8 steps)
+   @ = elongate: 'c3@3 e3' (c3 takes 3/4, e3 takes 1/4)
+   ! = replicate: 'c3!3 e3' (c3 c3 c3 e3)
+   ? = random: 'c3? e3' (c3 plays 50% of the time)
 
-   AVAILABLE FUNCTIONS:
-   - note('c3 e3 g3') — play notes (note names: c, d, e, f, g, a, b; sharps: cs, ds; flats: ef, bf; octaves: 1-7)
-   - s('bd sd hh') — play samples by name (bd=kick, sd=snare, hh=hihat, cp=clap, oh=open hat)
-   - sound('sawtooth') — set synth oscillator type
-   - .note('pattern') — set note pattern
-   - .s('name') — set sample/sound source
+   ═══ SOUND SOURCES ═══
+   Synths: sawtooth, square, triangle, sine, supersaw, pulse
+   Noise: white, pink, brown, crackle
+   Synth kick: sbd — analog kick with .decay(s) .pdecay(s) .penv(semitones)
+   ZZFX (retro/game): zzfx, z_sine, z_sawtooth, z_triangle, z_square, z_tan, z_noise
+     ZZFX params: .zrand() .slide() .deltaSlide() .pitchJump() .pitchJumpTime() .lfo() .znoise() .zmod() .zcrush() .zdelay() .tremolo()
 
-   CHAINABLE METHODS:
-   - .lpf(freq) — lowpass filter (20-20000 Hz)
-   - .hpf(freq) — highpass filter
-   - .resonance(q) — filter resonance (0-30)
-   - .gain(vol) — volume (0-1)
-   - .attack(s) — attack time
-   - .decay(s) — decay time
-   - .sustain(level) — sustain level (0-1)
-   - .release(s) — release time
-   - .delay(amount) — delay send (0-1)
-   - .delaytime(s) — delay time in seconds
-   - .delayfeedback(amount) — delay feedback (0-0.95)
-   - .room(amount) — reverb send (0-1)
-   - .pan(pos) — stereo position (0=left, 0.5=center, 1=right)
-   - .fast(n) — speed up by factor n
-   - .slow(n) — slow down by factor n
-   - .rev() — reverse the pattern
-   - .every(n, fn) — apply fn every n cycles
-   - .struct('pattern') — apply rhythmic structure
-   - .euclid(k, n) — euclidean rhythm
-   - .scale('C:minor') — quantize to scale
+   ═══ DIRT-SAMPLES (all loaded, 100+ banks) ═══
+   Drums: bd bd:0-24, sd sd:0-12, hh hh:0-12, oh, cp, rim, rs, mt, ht, lt, cb, cr, ride
+   Classic machines: 808 808bd 808cy 808hc 808ht 808lc 808lt 808mc 808mt 808oh 808sd, 909
+   Breakbeats: breaks125, breaks152, breaks157, breaks165
+   Bass: bass bass0 bass1 bass2 bass3 bassdm bassfoo jvbass jungbass
+   Melodic: arpy, pluck, gtr, sax, flick, future, newnotes, notes, pad, padlong
+   Electronic: rave rave2 ravemono, electro1, hoover, stab, industrial, techno
+   World/ethnic: tabla tabla2 tablex, sitar, chin, east, koy, world, sundance
+   Percussion: hand, drum, drumtraks, dr dr2 dr55 dr_few, perc, metal, click, co
+   Vocals/speech: speech, speechless, mouth, alphabet, diphone, diphone2
+   Noise/FX: noise noise2, glitch glitch2, fire, wind, birds birds3, insect, bubble
+   Retro/game: casio, gameboy, sid, moog, sequential, psr, monome
+   Misc: circus, space, toys, trump, wobble, xmas, yeah, foo, auto, cosmicg
+   Sample variants: s('bd:0')..s('bd:24'), s('arpy:0')..s('arpy:8')
+   Sample banks: .bank('RolandTR808'), .bank('RolandTR909')
 
-   WORKING EXAMPLES (use these as reference):
-   - Bass: note('c2 [~ c2] eb2 [~ g1]').sound('sawtooth').lpf(600).resonance(10).release(0.1)
-   - Chords: note('<[c3,e3,g3] [f3,a3,c4] [g3,b3,d4]>').sound('triangle').release(0.5).lpf(1500)
-   - Arp: note('c3 e3 g3 b3 g3 e3').fast(2).sound('sine').lpf(3000).delay(0.3).delaytime(0.15)
-   - Drums: s('bd sd [~ hh] sd, hh*4').gain(0.8)
-   - Euclidean: note('c3(3,8) e3(5,8)').sound('triangle').release(0.2)
-   - Melody: note('c4 d4 e4 ~ g4 e4 d4 c4').sound('sine').lpf(2000).release(0.3)
-   - Ambient: note('<c3 e3 g3 b3>').sound('sine').room(0.8).release(2).gain(0.4).slow(2)
+   ═══ PATTERN CONSTRUCTORS ═══
+   note('c3 e3') — melodic pattern (c..b, sharps: cs ds, flats: ef bf, octaves: 1-7)
+   s('bd sd') or sound('bd sd') — sample/synth pattern
+   stack(pat1, pat2) — play simultaneously (layering)
+   cat(pat1, pat2) — play sequentially (1 cycle each)
+   seq(pat1, pat2) — sequential but crammed into 1 cycle
+   arrange([8, verse], [4, chorus], [4, bridge]) — SONG STRUCTURE: each section plays for N cycles
 
-   CRITICAL RULES FOR STRUDEL CODE:
-   - Always use SINGLE QUOTES for strings inside the code
-   - note() and s() are top-level — do NOT chain one after the other, use .note() or .sound() as method
-   - The pattern auto-loops, no need for explicit loops
-   - Keep patterns concise — one line is ideal
+   ═══ SONG STRUCTURE with arrange() ═══
+   Use JavaScript variables to define sections, then arrange() to build a song:
+   let verse = stack(s('bd ~ bd ~'), note('c2 eb2').sound('sawtooth').lpf(600))
+   let chorus = stack(s('bd*4'), note('<[c3,e3,g3] [f3,a3,c4]>').sound('triangle'))
+   let bridge = note('a3 g3 f3 e3').sound('sine').room(0.5).slow(2)
+   arrange([8, verse], [4, chorus], [8, verse], [4, chorus], [4, bridge], [4, chorus])
+   This plays: 8 cycles verse → 4 cycles chorus → 8 verse → 4 chorus → 4 bridge → 4 chorus.
+   ALWAYS use arrange() when the user asks for a full song, verse-chorus, or multi-section structure.
+
+   ═══ EFFECTS ═══
+   Filters: .lpf(freq) .hpf(freq) .bpf(freq, bandq) .resonance(q) .vowel('a'|'e'|'i'|'o'|'u')
+   Envelope: .attack(s) .decay(s) .sustain(0-1) .release(s)
+   Gain: .gain(0-1) .velocity(0-1)
+   Delay: .delay(0-1) .delaytime(s) .delayfeedback(0-0.95)
+   Reverb: .room(0-1) .roomsize(0-10)
+   Distortion: .distort(0-10) .crush(1-16) .coarse(1+)
+   Phaser: .phaser(depth) .phaserdepth(d) .phasersweep(s) .phasercenter(hz)
+   Stereo: .pan(0-1) .jux(fn) — applies fn to right channel only
+   Pitch: .penv(semitones) .pdecay(s) — pitch envelope for kicks/percussion
+   FM synthesis: .fm(amount) — frequency modulation for rich harmonic content
+   Vibrato: .vibrato(depth) — oscillating pitch variation
+   Noise mix: .noise(0-1) — mix pink noise into oscillator
+
+   ═══ TIME & PATTERN MODIFIERS ═══
+   .fast(n) / .slow(n) — speed/slow by factor
+   .rev() — reverse pattern
+   .early(cycles) / .late(cycles) — shift in time
+   .every(n, fn) — apply fn every n cycles: .every(4, x => x.rev())
+   .euclid(k, n) — euclidean rhythm
+   .ply(n) — repeat each event n times
+   .chop(n) — slice sample into n parts
+   .loopAt(n) — stretch sample to n cycles
+   .slice(n, pattern) — chop + reorder slices
+   .fit() — fit sample to event duration
+   .speed(n) — playback speed (negative = reverse)
+   .begin(0-1) / .end(0-1) — play portion of sample
+   .iter(n) — rotate pattern each cycle
+   .palindrome() — reverse every other cycle
+   .struct('pattern') — apply rhythmic structure
+   .scale('C:minor') — quantize to scale
+
+   ═══ JAVASCRIPT ═══
+   You can use let/const for variables, register() for reusable chains:
+   let bass = note('c2 eb2 g1 c2').sound('sawtooth').lpf(600)
+   register('fatSaw', (pat) => pat.sound('supersaw').lpf(4000).room(0.2))
+   note('c3 e3 g3').fatSaw()
+
+   ═══ EXAMPLES ═══
+   Drums: stack(s('bd bd ~ bd'), s('~ sd ~ sd'), s('hh*8').gain(0.4))
+   Bass: note('c2 [~ c2] eb2 [~ g1]').sound('sawtooth').lpf(600).resonance(10).release(0.1)
+   Chords: note('<[c3,e3,g3] [f3,a3,c4] [g3,b3,d4]>').sound('triangle').release(0.5).lpf(1500)
+   Arp: note('c3 e3 g3 b3 g3 e3').fast(2).sound('sine').lpf(3000).delay(0.3).delaytime(0.15)
+   Breakbeat: s('breaks125').loopAt(4).chop(16).every(4, x => x.rev())
+   808 beat: stack(s('bd:3 ~ ~ bd:3 ~ ~ bd:3 ~'), s('~ ~ ~ ~ sd:3 ~ ~ ~'), s('hh*8').gain(0.35))
+   Full song: let v = stack(...); let ch = stack(...); arrange([8,v],[4,ch],[8,v],[4,ch])
+
+   ═══ RULES ═══
+   - SINGLE QUOTES for all strings inside code (JSON-safe)
+   - note() and s() are top-level constructors, use .note()/.sound() as methods
+   - Use stack() for layering, arrange() for song structure
+   - Use let for variables when building complex multi-section patterns
+   - Patterns auto-loop; arrange() loops the entire arrangement
 
 6) "strudelStop" — stop Strudel: {"type":"strudelStop"}
 
@@ -236,31 +283,41 @@ If unsure, consider:
 - Respond in the same language as the user's message.`;
 }
 
-// JSON schema for structured output
-const RESPONSE_SCHEMA = {
-  type: 'object' as const,
-  properties: {
-    message: {
-      type: 'string' as const,
-      description: 'Natural language response to the user',
-    },
-    actions: {
-      type: 'array' as const,
-      description: 'Actions to execute on the synthesizer. Empty array if no actions needed.',
-      items: {
-        type: 'object' as const,
-        properties: {
-          type: {
-            type: 'string' as const,
-            description: 'Action type: preset (SuperDough), modifyPreset, switchPreset, wafInstrument (SoundFont), strudel, strudelStop, harmonizer, arp, bpm',
-          },
-        },
-        required: ['type'] as const,
-      },
-    },
-  },
-  required: ['message', 'actions'] as const,
-};
+function parseAiResponse(text: string): AiResponse {
+  // 1. Try direct JSON parse
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed.message !== undefined || parsed.actions !== undefined) {
+      return { message: parsed.message ?? '', actions: parsed.actions ?? [] };
+    }
+    // Might be valid JSON but wrong keys
+    const msg = parsed.text ?? parsed.response ?? parsed.answer ?? '';
+    const acts = parsed.actions ?? parsed.tool_calls ?? parsed.steps ?? [];
+    if (msg || acts.length) return { message: msg, actions: acts };
+  } catch { /* not direct JSON */ }
+
+  // 2. Try to extract JSON from markdown code block: ```json ... ``` or ``` ... ```
+  const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlockMatch) {
+    try {
+      const parsed = JSON.parse(codeBlockMatch[1]);
+      return { message: parsed.message ?? '', actions: parsed.actions ?? [] };
+    } catch { /* not valid JSON in code block */ }
+  }
+
+  // 3. Try to find a JSON object in the text (first { to last })
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      const parsed = JSON.parse(text.slice(firstBrace, lastBrace + 1));
+      return { message: parsed.message ?? '', actions: parsed.actions ?? [] };
+    } catch { /* not valid JSON substring */ }
+  }
+
+  // 4. Fallback: treat entire text as message, no actions
+  return { message: text, actions: [] };
+}
 
 interface GeminiContent {
   role: string;
@@ -289,12 +346,10 @@ async function callGemini(messages: ChatMessage[]): Promise<AiResponse> {
     contents,
     tools: [{ google_search: {} }],
     generationConfig: {
-      temperature: 0.6,
-      maxOutputTokens: 4096,
-      responseMimeType: 'application/json',
-      responseJsonSchema: RESPONSE_SCHEMA,
+      temperature: 0.7,
+      maxOutputTokens: 65536,
       thinkingConfig: {
-        thinkingLevel,
+        thinkingBudget: 8192,
       },
     },
   };
@@ -314,15 +369,22 @@ async function callGemini(messages: ChatMessage[]): Promise<AiResponse> {
   }
 
   const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini');
-
-  try {
-    return JSON.parse(text) as AiResponse;
-  } catch {
-    // Fallback: if JSON parsing fails, treat as plain text
-    return { message: text, actions: [] };
+  // With thinking enabled, response has multiple parts: thought parts + actual response.
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  // Collect all non-thought text parts
+  const textParts = parts
+    .filter((p: Record<string, unknown>) => !p.thought && p.text)
+    .map((p: Record<string, unknown>) => p.text as string);
+  // Fallback: if no non-thought parts, use last part
+  if (textParts.length === 0) {
+    const last = parts[parts.length - 1];
+    if (last?.text) textParts.push(last.text as string);
   }
+  const fullText = textParts.join('\n');
+  if (!fullText) throw new Error('Empty response from Gemini');
+
+  // Try to extract JSON from the response (model may wrap in markdown code blocks)
+  return parseAiResponse(fullText);
 }
 
 async function executeAction(action: AiAction): Promise<string> {

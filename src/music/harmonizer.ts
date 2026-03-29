@@ -113,6 +113,19 @@ function getChordForNote(inputNote: number): ChordResult | null {
   const keyRootPc = getKeyRootPc();
   const isTonic = (pc === keyRootPc);
 
+  // Fifths mode: always play root + perfect fifth, ignore scale
+  if (fifths) {
+    const rootName = NOTE_NAMES[pc];
+    return {
+      root: inputNote,
+      quality: '5',
+      notes: [inputNote, inputNote + 7],
+      name: `${rootName}5`,
+      degree: findScaleDegree(pc, scaleNotes) + 1 || 0,
+      inversion: 0,
+    };
+  }
+
   // Find which chord to play
   let chord: DiatonicChord | null = null;
   let degree = findScaleDegree(pc, scaleNotes);
@@ -180,6 +193,9 @@ function handleNoteOn(event: NoteEvent): void {
     activeChords.set(event.note, chord.notes);
     eventBus.emit('harmony:noteOn', { ...event, chord });
     eventBus.emit('ui:chordDisplay', chord);
+  } else {
+    // Note outside scale — pass through without harmonization
+    eventBus.emit('harmony:noteOn', { ...event });
   }
 }
 

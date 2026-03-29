@@ -38,8 +38,10 @@ export function initSoundRouter(): void {
 
   // On preset change, stop all notes and preload WebAudioFont instrument
   eventBus.on('state:presetChanged', (preset) => {
-    wafAllNotesOff();
-    sdAllNotesOff();
+    if (isAudioReady()) {
+      wafAllNotesOff();
+      sdAllNotesOff();
+    }
     if (preset.engine === 'webaudiofont') {
       loadInstrument((preset.params as WebAudioFontParams).instrument).catch(console.warn);
     }

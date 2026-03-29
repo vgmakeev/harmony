@@ -27,6 +27,22 @@ declare module '@strudel/core' {
 
 declare module '@strudel/webaudio' {
   export const webaudioOutput: (...args: unknown[]) => unknown;
+  export function initAudio(options?: Record<string, unknown>): Promise<void>;
+  export function getAudioContext(): AudioContext;
+  export function setAudioContext(ctx: AudioContext): AudioContext;
+  export function registerSynthSounds(): void;
+  export function superdough(
+    value: Record<string, unknown>,
+    time: number,
+    duration: number,
+    cps?: number,
+    cycle?: number,
+  ): Promise<void>;
+  export function samples(
+    sampleMap: string | Record<string, unknown>,
+    baseUrl?: string,
+    options?: Record<string, unknown>,
+  ): Promise<void>;
 }
 
 declare module '@strudel/tonal' {}
@@ -37,6 +53,7 @@ declare module 'superdough' {
   export function getAudioContext(): AudioContext;
   export function setAudioContext(ctx: AudioContext): AudioContext;
   export function registerSynthSounds(): void;
+  export function registerZZFXSounds(): void;
   export function superdough(
     value: Record<string, unknown>,
     time: number,
