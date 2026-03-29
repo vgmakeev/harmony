@@ -24,7 +24,7 @@ let apiKey = localStorage.getItem('harmonia_gemini_key') ?? '';
 const history: ChatMessage[] = [];
 
 type ThinkingLevel = 'low' | 'medium' | 'high';
-let thinkingLevel: ThinkingLevel = (localStorage.getItem('harmonia_thinking_level') as ThinkingLevel) ?? 'low';
+let thinkingLevel: ThinkingLevel = (localStorage.getItem('harmonia_thinking_level') as ThinkingLevel) ?? 'medium';
 
 export function setThinkingLevel(level: ThinkingLevel): void {
   thinkingLevel = level;
@@ -87,20 +87,11 @@ AVAILABLE PRESETS: ${presetList}
 
 ═══ ACTION TYPES ═══
 
-We have 3 engines:
-- "synth" — built-in FM synthesis. Best for: electronic sounds, FM bells, custom sound design.
-- "superdough" — Strudel's engine with supersaw, pulse, vowel. Best for: trance leads, acid basses, pads, noise percussion.
+We have 2 engines:
+- "superdough" — versatile synth engine with supersaw, pulse, vowel, bitcrush, delay, reverb. Best for: all electronic/synthetic sounds (leads, basses, pads, FX, noise percussion).
 - "webaudiofont" — sample-based GM instruments. Best for: realistic acoustic sounds (piano, guitar, brass, strings, woodwinds, orchestral).
 
-1a) "preset" — create an FM synth preset (engine: synth):
-   {"type":"preset","engine":"synth","name":"Growl Bass","category":"bass","params":{"waveform":"sawtooth","attack":0.01,"decay":0.3,"sustain":0.4,"release":0.5,"cutoff":2000,"resonance":5,"detune":15,"voices":3,"gain":0.7}}
-   waveform: sine|square|sawtooth|triangle
-   attack, decay, sustain, release, cutoff (20-20000), resonance (0-30), detune (0-50 cents), voices (1-8), gain (0-1)
-   FM: fm (0-1000), fmRatio (0.5-16), fmDecay (0.01-5)
-   distortion (0-1, e.g. 0.2 = mild, 0.5 = heavy)
-   FX: delayTime (0-1 sec), delayFeedback (0-0.95), delayMix (0-1), reverbMix (0-1)
-
-1b) "preset" — create a SuperDough preset (engine: superdough):
+1) "preset" — create a SuperDough preset (engine: superdough):
    {"type":"preset","engine":"superdough","name":"Trance Saw","category":"lead","params":{"s":"supersaw","gain":0.7,"cutoff":4000,"resonance":2,"attack":0.01,"decay":0.3,"sustain":0.6,"release":0.4,"unison":7,"spread":0.8,"detune":0.2}}
    s: sawtooth|square|triangle|sine|supersaw|pulse|white|pink
    gain, attack, decay, sustain, release, cutoff, resonance, hcutoff, hresonance
@@ -108,13 +99,15 @@ We have 3 engines:
    Pulse ONLY: pw (0-1)
    FX: distort (0-1), crush (0-16), delay (0-1), delaytime, delayfeedback, room (0-1), roomsize (0-10), pan (0-1)
    Special: vowel (a|e|i|o|u) — works best with sawtooth/square
-   NOTE: param names differ from synth engine! distort (NOT distortion), detune is 0-1 (NOT 0-50).
 
    SuperDough tips:
      Trance supersaw: s=supersaw, unison=7, spread=0.8, detune=0.2, cutoff=4000
      Vowel pad: s=sawtooth, vowel='o', room=0.5, attack=0.5
+     Acid bass: s=sawtooth, cutoff=500, resonance=20, distort=0.5
      Acid pulse: s=pulse, pw=0.3, cutoff=500, resonance=20, distort=0.5
      Noise perc: s=white, cutoff=5000, decay=0.08, sustain=0
+     Sub bass: s=sine, cutoff=2000, gain=0.9
+     Reese bass: s=supersaw, unison=3, spread=0.5, detune=0.4, cutoff=300
 
 2) "modifyPreset" — modify the current preset's params (partial update, merged with current):
    {"type":"modifyPreset","params":{"cutoff":600,"resonance":18,"distortion":0.5}}
@@ -210,15 +203,31 @@ We have 3 engines:
 WAF INSTRUMENT CATALOG (use with "wafInstrument" action):
 ${wafCatalogStr}
 
+═══ ENGINE SELECTION GUIDE ═══
+When the user asks to create or find a sound, ALWAYS pick the best engine for the job:
+
+CHOOSE "webaudiofont" (wafInstrument action) when:
+  - User asks for ANY real/acoustic instrument: piano, guitar, bass guitar, violin, cello, strings, trumpet, sax, flute, clarinet, organ, drums, percussion, harp, accordion, etc.
+  - User mentions a genre that relies on real instruments: jazz, classical, orchestral, bossa nova, blues, country, folk, soul, R&B
+  - User says "realistic", "acoustic", "natural", "orchestral", "GM", "General MIDI"
+  - User names a specific instrument that exists in the WAF catalog
+
+CHOOSE "superdough" (preset action) when:
+  - User asks for ANY electronic/synthetic sound: leads, basses, pads, plucks, noise, FX
+  - Keywords: "supersaw", "unison", "detuned", "trance", "acid", "vowel", "crushed", "bitcrush", "synth", "electronic", "bass", "pad", "lead"
+  - This is the DEFAULT engine for all non-acoustic sounds
+
+If unsure, consider:
+  1. Does a WAF instrument match the request (real instrument)? → use wafInstrument
+  2. Everything else → use superdough preset
+
 ═══ RULES ═══
 - ALWAYS include actions when the user asks to create, change, or play anything. This is your primary function.
 - Combine multiple actions when needed (e.g., preset + arp + bpm for a complete vibe).
-- "message" field: briefly explain what you did. Keep it concise.
+- "message" field: briefly explain what you did and which engine you chose and why (1 sentence). Keep it concise.
 - Be creative and expert in sound design, music theory, synthesis.
-- When user asks for realistic instrument sounds (piano, guitar, trumpet, violin, sax, etc.), prefer the "wafInstrument" action with a GM instrument from the catalog.
-- When user asks for electronic/synthetic sounds (leads, pads, basses, acid), use "preset" action with engine "synth" or "superdough". Both support delay and reverb. SuperDough additionally has crush, room/roomsize, and pan.
 - WAF instruments work perfectly with the harmonizer and arpeggiator — combine them!
-- When user mentions a song/artist, use your search knowledge to match the vibe: find the BPM, key, and characteristic sounds, then recreate them. Consider using WAF instruments for realistic timbres.
+- When user mentions a song/artist, use your search knowledge to match the vibe: find the BPM, key, and characteristic sounds, then recreate them. Pick the engine that best matches the original instruments.
 - TO MODIFY CURRENT SOUND: Use "modifyPreset" action with only the params you want to change. It merges with the current preset. Do NOT recreate the entire preset.
 - TO CREATE A NEW SOUND: Use "preset" action with a full set of params.
 - If user's request closely matches an existing preset, prefer "switchPreset". If they want custom tweaks, create a new "preset".
@@ -243,7 +252,7 @@ const RESPONSE_SCHEMA = {
         properties: {
           type: {
             type: 'string' as const,
-            description: 'Action type: preset, modifyPreset, switchPreset, wafInstrument, strudel, strudelStop, harmonizer, arp, bpm',
+            description: 'Action type: preset (SuperDough), modifyPreset, switchPreset, wafInstrument (SoundFont), strudel, strudelStop, harmonizer, arp, bpm',
           },
         },
         required: ['type'] as const,
@@ -319,7 +328,7 @@ async function callGemini(messages: ChatMessage[]): Promise<AiResponse> {
 async function executeAction(action: AiAction): Promise<string> {
   switch (action.type) {
     case 'preset': {
-      const engine = (action.engine as string) === 'superdough' ? 'superdough' as const : 'synth' as const;
+      const engine = 'superdough' as const;
 
       // Gemini may send params as nested object or flat on the action — normalize both
       let rawParams = action.params as Record<string, unknown> | undefined;
@@ -329,18 +338,9 @@ async function executeAction(action: AiAction): Promise<string> {
         rawParams = rest as Record<string, unknown>;
       }
 
-      // Ensure required defaults for synth engine
-      if (engine === 'synth') {
-        const defaults: Record<string, unknown> = {
-          waveform: 'sawtooth', attack: 0.01, decay: 0.3, sustain: 0.5,
-          release: 0.5, cutoff: 4000, resonance: 2, detune: 0, voices: 1, gain: 0.7,
-        };
-        rawParams = { ...defaults, ...rawParams };
-      } else {
-        // superdough defaults
-        const defaults: Record<string, unknown> = { s: 'sawtooth', gain: 0.7 };
-        rawParams = { ...defaults, ...rawParams };
-      }
+      // Ensure required SuperDough defaults
+      const defaults: Record<string, unknown> = { s: 'sawtooth', gain: 0.7 };
+      rawParams = { ...defaults, ...rawParams };
 
       const preset: Preset = {
         id: `ai-${Date.now()}`,
@@ -436,8 +436,9 @@ async function executeAction(action: AiAction): Promise<string> {
     }
 
     case 'bpm': {
-      setBpm(action.value as number);
-      return `BPM: ${action.value}`;
+      const bpmVal = Number(action.value);
+      if (!isNaN(bpmVal)) setBpm(bpmVal);
+      return `BPM: ${bpmVal}`;
     }
 
     default:

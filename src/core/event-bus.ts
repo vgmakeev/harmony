@@ -31,6 +31,8 @@ export interface EventMap {
 
   'recording:start': undefined;
   'recording:stop': undefined;
+
+  'param:change': { param: string; value: number };
 }
 
 type Listener<T> = (data: T) => void;

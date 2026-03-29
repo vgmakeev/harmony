@@ -78,7 +78,7 @@ test.describe('Audio Engine — Sound Pipeline', () => {
   });
 
   test('synth panel shows current preset name', async ({ page }) => {
-    const presetName = page.locator('[data-testid="synth-panel"] .text-accent-blue.truncate');
+    const presetName = page.locator('[data-testid="synth-panel"] .truncate');
     await expect(presetName).toBeVisible();
     const name = await presetName.textContent();
     expect(name).toBeTruthy();
@@ -86,7 +86,7 @@ test.describe('Audio Engine — Sound Pipeline', () => {
   });
 
   test('switching preset updates synth panel', async ({ page }) => {
-    const presetName = page.locator('[data-testid="synth-panel"] .text-accent-blue.truncate');
+    const presetName = page.locator('[data-testid="synth-panel"] .truncate');
     const name1 = await presetName.textContent();
 
     await page.locator('button:has-text("›")').click();

@@ -73,6 +73,16 @@ export function resolveChord(chord: DiatonicChord, fifths: boolean): {
     const rootToFifth = chord.triadIntervals[2];
     return { intervals: [0, rootToFifth], quality: '5', name: `${rootName}5` };
   }
+  // Augmented triads (e.g. III in harmonic minor) sound harsh in practice —
+  // flatten to major (perfect fifth) which is what musicians actually use.
+  if (chord.triadQuality === 'aug') {
+    return {
+      intervals: [0, chord.triadIntervals[1], 7],
+      quality: 'maj',
+      name: `${rootName}`,
+    };
+  }
+
   return {
     intervals: chord.triadIntervals,
     quality: chord.triadQuality,

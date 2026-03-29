@@ -81,7 +81,7 @@ test.describe('Gemini Action Execution', () => {
     const msg = await getLastAiMessage(page);
     expect(msg).toContain('Preset applied: Test Bass');
     // Verify synth panel shows the preset name
-    await expect(page.locator('.text-accent-blue.truncate:has-text("Test Bass")')).toBeVisible();
+    await expect(page.locator('[data-testid="synth-panel"] .truncate:has-text("Test Bass")')).toBeVisible();
   });
 
   test('synth preset — flat params (Gemini puts params at top level)', async ({ page }) => {
@@ -209,7 +209,7 @@ test.describe('Gemini Action Execution', () => {
 
     const msg = await getLastAiMessage(page);
     expect(msg).toContain('Preset applied: Trance');
-    await expect(page.locator('[data-testid="synth-panel"] button:has-text("SD")')).toBeVisible();
+    await expect(page.locator('[data-testid="synth-panel"] button:has-text("SuperDough")')).toBeVisible();
   });
 
   test('superdough preset — flat params', async ({ page }) => {
@@ -266,7 +266,7 @@ test.describe('Gemini Action Execution', () => {
 
     const msg = await getLastAiMessage(page);
     expect(msg).toContain('WAF instrument: Trumpet');
-    await expect(page.locator('[data-testid="synth-panel"] button:has-text("WAF")')).toBeVisible();
+    await expect(page.locator('[data-testid="synth-panel"] button:has-text("SoundFont")')).toBeVisible();
   });
 
   test('wafInstrument — piano', async ({ page }) => {

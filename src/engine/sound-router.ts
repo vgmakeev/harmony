@@ -1,8 +1,7 @@
-import type { SynthParams, WebAudioFontParams, SuperDoughParams } from '../types';
+import type { WebAudioFontParams, SuperDoughParams } from '../types';
 import { eventBus } from '../core/event-bus';
 import { getState } from '../core/state';
 import { ensureAudioRunning, isAudioReady } from './audio-engine';
-import { synthNoteOn, synthNoteOff, synthAllNotesOff } from './synth-engine';
 import { wafNoteOn, wafNoteOff, wafAllNotesOff, loadInstrument } from './webaudiofont-engine';
 import { sdNoteOn, sdNoteOff, sdAllNotesOff } from './superdough-engine';
 
@@ -14,9 +13,7 @@ export function initSoundRouter(): void {
     const preset = getState().currentPreset;
     if (!preset) return;
 
-    if (preset.engine === 'synth') {
-      synthNoteOn(event.note, event.velocity, preset.params as SynthParams);
-    } else if (preset.engine === 'superdough') {
+    if (preset.engine === 'superdough') {
       sdNoteOn(event.note, event.velocity, preset.params as SuperDoughParams);
     } else {
       const p = preset.params as WebAudioFontParams;
@@ -30,9 +27,7 @@ export function initSoundRouter(): void {
     const preset = getState().currentPreset;
     if (!preset) return;
 
-    if (preset.engine === 'synth') {
-      synthNoteOff(event.note);
-    } else if (preset.engine === 'superdough') {
+    if (preset.engine === 'superdough') {
       sdNoteOff(event.note);
     } else {
       wafNoteOff(event.note);
@@ -43,7 +38,6 @@ export function initSoundRouter(): void {
 
   // On preset change, stop all notes and preload WebAudioFont instrument
   eventBus.on('state:presetChanged', (preset) => {
-    synthAllNotesOff();
     wafAllNotesOff();
     sdAllNotesOff();
     if (preset.engine === 'webaudiofont') {

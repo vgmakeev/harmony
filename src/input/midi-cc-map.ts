@@ -1,11 +1,10 @@
 import { eventBus } from '../core/event-bus';
-import { synthUpdateParam } from '../engine/synth-engine';
 
 interface CcMapping {
   param: string;
   min: number;
   max: number;
-  log?: boolean; // logarithmic scaling (for frequency params)
+  log?: boolean;
 }
 
 const CC_MAP: Record<number, CcMapping> = {
@@ -20,7 +19,6 @@ const CC_MAP: Record<number, CcMapping> = {
 function scaleValue(cc7bit: number, mapping: CcMapping): number {
   const t = cc7bit / 127;
   if (mapping.log) {
-    // Logarithmic scaling: exponential interpolation between min and max
     return mapping.min * Math.pow(mapping.max / mapping.min, t);
   }
   return mapping.min + t * (mapping.max - mapping.min);
@@ -31,6 +29,6 @@ export function initMidiCcMap(): void {
     const mapping = CC_MAP[cc];
     if (!mapping) return;
     const scaled = scaleValue(value, mapping);
-    synthUpdateParam(mapping.param, scaled);
+    eventBus.emit('param:change', { param: mapping.param, value: scaled });
   });
 }

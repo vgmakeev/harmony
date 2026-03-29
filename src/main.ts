@@ -23,8 +23,8 @@ initMidiInput();
 initMidiCcMap();
 initMidiOutput();
 
-// Set default preset — use a synth preset that works instantly (no CDN load)
-const defaultPreset = PRESETS.find(p => p.id === 'dx7-epiano') ?? PRESETS[0];
+// Set default preset — use a SuperDough preset that works instantly (no CDN load)
+const defaultPreset = PRESETS.find(p => p.id === 'sd-supersaw') ?? PRESETS[0];
 setPreset(defaultPreset);
 
 // Build UI

@@ -14,41 +14,8 @@ interface ParamDef {
   log?: boolean;
 }
 
-const SYNTH_WAVES = ['sine', 'square', 'sawtooth', 'triangle'];
 const SD_SOUNDS = ['sawtooth', 'square', 'triangle', 'sine', 'supersaw', 'pulse', 'white', 'pink'];
 const CATEGORIES: PresetCategory[] = ['keys', 'bass', 'pad', 'lead', 'fx', 'orch'];
-
-const SYNTH_ADSR: ParamDef[] = [
-  { key: 'attack', label: 'Atk', min: 0.001, max: 2, step: 0.001 },
-  { key: 'decay', label: 'Dec', min: 0.01, max: 3, step: 0.01 },
-  { key: 'sustain', label: 'Sus', min: 0, max: 1, step: 0.01 },
-  { key: 'release', label: 'Rel', min: 0.01, max: 5, step: 0.01 },
-];
-
-const SYNTH_FILTER: ParamDef[] = [
-  { key: 'cutoff', label: 'Cut', min: 20, max: 20000, step: 1, log: true },
-  { key: 'resonance', label: 'Res', min: 0, max: 30, step: 0.1 },
-];
-
-const SYNTH_OSC: ParamDef[] = [
-  { key: 'voices', label: 'Uni', min: 1, max: 8, step: 1 },
-  { key: 'detune', label: 'Det', min: 0, max: 50, step: 0.5 },
-  { key: 'gain', label: 'Vol', min: 0, max: 1, step: 0.01 },
-];
-
-const SYNTH_FM: ParamDef[] = [
-  { key: 'fm', label: 'Depth', min: 0, max: 1000, step: 1 },
-  { key: 'fmRatio', label: 'Ratio', min: 0.5, max: 16, step: 0.1 },
-  { key: 'fmDecay', label: 'Decay', min: 0.01, max: 5, step: 0.01 },
-];
-
-const SYNTH_FX: ParamDef[] = [
-  { key: 'distortion', label: 'Dist', min: 0, max: 1, step: 0.01 },
-  { key: 'delayTime', label: 'Dly', min: 0, max: 1, step: 0.01 },
-  { key: 'delayFeedback', label: 'Fb', min: 0, max: 0.95, step: 0.01 },
-  { key: 'delayMix', label: 'DlyMx', min: 0, max: 1, step: 0.01 },
-  { key: 'reverbMix', label: 'Rev', min: 0, max: 1, step: 0.01 },
-];
 
 const SD_ADSR: ParamDef[] = [
   { key: 'attack', label: 'Atk', min: 0.001, max: 2, step: 0.001 },
@@ -93,44 +60,6 @@ function formatValue(value: number, def: ParamDef): string {
 
 function defaultForDef(def: ParamDef): number {
   return def.log ? def.min : def.min;
-}
-
-// ADSR envelope SVG visualization
-function createAdsrViz(params: Record<string, unknown>): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 120 40');
-  svg.setAttribute('class', 'w-full h-10 mb-1');
-  svg.style.maxWidth = '120px';
-
-  const a = Math.min((params.attack as number) ?? 0.01, 2);
-  const d = Math.min((params.decay as number) ?? 0.3, 3);
-  const s = (params.sustain as number) ?? 0.5;
-  const r = Math.min((params.release as number) ?? 0.5, 5);
-
-  const total = a + d + 0.3 + r;
-  const sc = 110 / total;
-  const x0 = 5, yTop = 4, yBot = 36;
-  const xa = x0 + a * sc;
-  const xd = xa + d * sc;
-  const xs = xd + 0.3 * sc;
-  const xr = xs + r * sc;
-  const ys = yTop + (1 - s) * (yBot - yTop);
-
-  const pathD = `M${x0},${yBot} L${xa},${yTop} L${xd},${ys} L${xs},${ys} L${xr},${yBot}`;
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', pathD);
-  path.setAttribute('fill', 'none');
-  path.setAttribute('stroke', 'var(--color-accent-blue, #60a5fa)');
-  path.setAttribute('stroke-width', '1.5');
-  path.setAttribute('stroke-linejoin', 'round');
-
-  const fill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  fill.setAttribute('d', pathD + ' Z');
-  fill.setAttribute('fill', 'var(--color-accent-blue, #60a5fa)');
-  fill.setAttribute('opacity', '0.1');
-
-  svg.append(fill, path);
-  return svg;
 }
 
 // SVG waveform icons for oscillator type buttons
@@ -194,8 +123,19 @@ export function createSynthPanel(): HTMLElement {
   const engineBtns = document.createElement('div');
   engineBtns.className = 'flex gap-0.5';
 
+  const ENGINE_NAME_COLORS: Record<EngineType, string> = {
+    superdough: 'text-accent-purple',
+    webaudiofont: 'text-green-400',
+  };
+
   const presetNameEl = document.createElement('span');
-  presetNameEl.className = 'text-xs text-accent-blue truncate flex-1';
+  presetNameEl.className = 'text-xs font-semibold truncate flex-1 text-accent-blue';
+
+  function updatePresetNameColor(): void {
+    const engine = getState().currentPreset?.engine;
+    if (!engine) return;
+    presetNameEl.className = `text-xs font-semibold truncate flex-1 ${ENGINE_NAME_COLORS[engine]}`;
+  }
 
   const unsavedDot = document.createElement('span');
   unsavedDot.className = 'text-accent-pink text-xs hidden';
@@ -251,13 +191,11 @@ export function createSynthPanel(): HTMLElement {
   }
 
   // Static engine button class maps (avoid dynamic Tailwind)
-  const ENGINE_CLASSES = {
-    synth:        { active: 'px-1.5 py-0.5 text-[9px] rounded border font-bold bg-accent-blue/20 border-accent-blue text-accent-blue',
-                    inactive: 'px-1.5 py-0.5 text-[9px] rounded border font-bold border-border text-text-secondary/40 hover:text-text-secondary' },
-    superdough:   { active: 'px-1.5 py-0.5 text-[9px] rounded border font-bold bg-accent-purple/20 border-accent-purple text-accent-purple',
-                    inactive: 'px-1.5 py-0.5 text-[9px] rounded border font-bold border-border text-text-secondary/40 hover:text-text-secondary' },
-    webaudiofont: { active: 'px-1.5 py-0.5 text-[9px] rounded border font-bold bg-green-400/20 border-green-400 text-green-400',
-                    inactive: 'px-1.5 py-0.5 text-[9px] rounded border font-bold border-border text-text-secondary/40 hover:text-text-secondary' },
+  const ENGINE_CLASSES: Record<EngineType, { active: string; inactive: string }> = {
+    superdough:   { active: 'px-2 py-0.5 text-[10px] rounded border-2 font-extrabold bg-accent-purple/20 border-accent-purple text-accent-purple shadow-[0_0_6px_rgba(168,130,255,0.4)]',
+                    inactive: 'px-1.5 py-0.5 text-[9px] rounded border font-bold border-border text-text-secondary/40 hover:text-text-secondary cursor-pointer' },
+    webaudiofont: { active: 'px-2 py-0.5 text-[10px] rounded border-2 font-extrabold bg-green-400/20 border-green-400 text-green-400 shadow-[0_0_6px_rgba(74,222,128,0.4)]',
+                    inactive: 'px-1.5 py-0.5 text-[9px] rounded border font-bold border-border text-text-secondary/40 hover:text-text-secondary cursor-pointer' },
   };
 
   function buildEngineButtons(): void {
@@ -266,9 +204,8 @@ export function createSynthPanel(): HTMLElement {
     if (!preset) return;
 
     const engines: { label: string; value: EngineType }[] = [
-      { label: 'FM', value: 'synth' },
-      { label: 'SD', value: 'superdough' },
-      { label: 'WAF', value: 'webaudiofont' },
+      { label: 'SuperDough', value: 'superdough' },
+      { label: 'SoundFont', value: 'webaudiofont' },
     ];
 
     for (const eng of engines) {
@@ -288,16 +225,11 @@ export function createSynthPanel(): HTMLElement {
     const gain = (oldParams.gain as number) ?? 0.7;
 
     let newParams: Record<string, unknown>;
-    if (engine === 'synth') {
+    if (engine === 'superdough') {
+      const s = (oldParams.s as string) ?? 'sawtooth';
       newParams = {
-        waveform: mapWaveform(oldParams), attack: oldParams.attack ?? 0.01, decay: oldParams.decay ?? 0.3,
-        sustain: oldParams.sustain ?? 0.5, release: oldParams.release ?? 0.5,
-        cutoff: oldParams.cutoff ?? 4000, resonance: oldParams.resonance ?? 2,
-        detune: 0, voices: 1, gain,
-      };
-    } else if (engine === 'superdough') {
-      newParams = {
-        s: mapSound(oldParams), attack: oldParams.attack ?? 0.01, decay: oldParams.decay ?? 0.3,
+        s: SD_SOUNDS.includes(s) ? s : 'sawtooth',
+        attack: oldParams.attack ?? 0.01, decay: oldParams.decay ?? 0.3,
         sustain: oldParams.sustain ?? 0.5, release: oldParams.release ?? 0.5,
         cutoff: oldParams.cutoff ?? 4000, resonance: oldParams.resonance ?? 2, gain,
       };
@@ -306,20 +238,6 @@ export function createSynthPanel(): HTMLElement {
     }
 
     setPreset({ ...preset, engine, params: newParams as unknown as Preset['params'] });
-  }
-
-  function mapWaveform(params: Record<string, unknown>): string {
-    const s = (params.s as string) ?? (params.waveform as string) ?? 'sawtooth';
-    if (SYNTH_WAVES.includes(s)) return s;
-    if (s === 'supersaw') return 'sawtooth';
-    if (s === 'pulse') return 'square';
-    return 'sawtooth';
-  }
-
-  function mapSound(params: Record<string, unknown>): string {
-    const w = (params.waveform as string) ?? (params.s as string) ?? 'sawtooth';
-    if (SD_SOUNDS.includes(w)) return w;
-    return 'sawtooth';
   }
 
   // === SAVE DROPDOWN ===
@@ -457,7 +375,7 @@ export function createSynthPanel(): HTMLElement {
     }
 
     const params = preset.params as unknown as Record<string, unknown>;
-    const soundType = (params.s as string) ?? (params.waveform as string) ?? null;
+    const soundType = (params.s as string) ?? null;
 
     // Only full rebuild when preset ID, engine, or sound type changes
     const needsRebuild = preset.id !== renderedPresetId
@@ -487,6 +405,7 @@ export function createSynthPanel(): HTMLElement {
     }
 
     presetNameEl.textContent = preset.name;
+    updatePresetNameColor();
     originalParams = JSON.stringify(preset.params);
     unsavedDot.classList.add('hidden');
     buildEngineButtons();
@@ -496,20 +415,18 @@ export function createSynthPanel(): HTMLElement {
     // Track what we've rendered
     renderedPresetId = preset.id;
     renderedEngine = preset.engine;
-    renderedSoundType = (params.s as string) ?? (params.waveform as string) ?? null;
+    renderedSoundType = (params.s as string) ?? null;
 
     if (preset.engine === 'webaudiofont') {
       buildWafBrowser(content, params);
       return;
     }
 
-    const isSd = preset.engine === 'superdough';
-    // Use static class strings for slider accents
-    const accentClass = isSd ? 'accent-purple' : 'accent-blue';
+    const accentClass = 'accent-purple';
 
     // Waveform / sound selector
-    const sounds = isSd ? SD_SOUNDS : SYNTH_WAVES;
-    const soundKey = isSd ? 's' : 'waveform';
+    const sounds = SD_SOUNDS;
+    const soundKey = 's';
     const currentSound = (params[soundKey] as string) ?? sounds[0];
 
     const waveRow = document.createElement('div');
@@ -519,9 +436,7 @@ export function createSynthPanel(): HTMLElement {
       const short = s === 'sawtooth' ? 'saw' : s === 'triangle' ? 'tri' : s === 'supersaw' ? 'ssaw' : s;
       const active = s === currentSound;
       btn.className = active
-        ? (isSd
-          ? 'px-1.5 py-1 text-[10px] rounded border bg-accent-purple/20 border-accent-purple text-accent-purple'
-          : 'px-1.5 py-1 text-[10px] rounded border bg-accent-blue/20 border-accent-blue text-accent-blue')
+        ? 'px-1.5 py-1 text-[10px] rounded border bg-accent-purple/20 border-accent-purple text-accent-purple'
         : 'px-1.5 py-1 text-[10px] rounded border border-border text-text-secondary hover:text-text-primary transition-colors';
       btn.append(createWaveIcon(s), document.createTextNode(` ${short}`));
       btn.addEventListener('click', () => updateParam(soundKey, s));
@@ -529,42 +444,25 @@ export function createSynthPanel(): HTMLElement {
     }
     content.appendChild(waveRow);
 
-    // ADSR visualization
-    if (!isSd) {
-      content.appendChild(createAdsrViz(params));
-    }
-
     // Build param groups
-    if (isSd) {
-      buildParamGroup('ADSR', SD_ADSR, params, accentClass);
-      buildParamGroup('Filter', SD_FILTER, params, accentClass);
-      const oscParams: ParamDef[] = [{ key: 'gain', label: 'Vol', min: 0, max: 1, step: 0.01 }];
-      if (currentSound === 'supersaw') {
-        oscParams.push(
-          { key: 'unison', label: 'Uni', min: 1, max: 16, step: 1 },
-          { key: 'spread', label: 'Spr', min: 0, max: 1, step: 0.01 },
-          { key: 'detune', label: 'Det', min: 0, max: 1, step: 0.01 },
-        );
-      }
-      if (currentSound === 'pulse') {
-        oscParams.push({ key: 'pw', label: 'PW', min: 0, max: 1, step: 0.01 });
-      }
-      buildParamGroup('Osc', oscParams, params, accentClass);
-      if (['sawtooth', 'square', 'supersaw', 'pulse'].includes(currentSound)) {
-        buildVowelSelector(params);
-      }
-      buildParamGroup('FX', SD_FX, params, accentClass);
-    } else {
-      buildParamGroup('ADSR', SYNTH_ADSR, params, accentClass);
-      buildParamGroup('Filter', SYNTH_FILTER, params, accentClass);
-      buildParamGroup('Osc', SYNTH_OSC, params, accentClass);
-      const fmDepth = (params.fm as number) ?? 0;
-      buildCollapsibleGroup('FM', SYNTH_FM, params, accentClass, fmDepth > 0);
-      const hasFx = ((params.distortion as number) ?? 0) > 0
-        || ((params.delayMix as number) ?? 0) > 0
-        || ((params.reverbMix as number) ?? 0) > 0;
-      buildCollapsibleGroup('FX', SYNTH_FX, params, accentClass, hasFx);
+    buildParamGroup('ADSR', SD_ADSR, params, accentClass);
+    buildParamGroup('Filter', SD_FILTER, params, accentClass);
+    const oscParams: ParamDef[] = [{ key: 'gain', label: 'Vol', min: 0, max: 1, step: 0.01 }];
+    if (currentSound === 'supersaw') {
+      oscParams.push(
+        { key: 'unison', label: 'Uni', min: 1, max: 16, step: 1 },
+        { key: 'spread', label: 'Spr', min: 0, max: 1, step: 0.01 },
+        { key: 'detune', label: 'Det', min: 0, max: 1, step: 0.01 },
+      );
     }
+    if (currentSound === 'pulse') {
+      oscParams.push({ key: 'pw', label: 'PW', min: 0, max: 1, step: 0.01 });
+    }
+    buildParamGroup('Osc', oscParams, params, accentClass);
+    if (['sawtooth', 'square', 'supersaw', 'pulse'].includes(currentSound)) {
+      buildVowelSelector(params);
+    }
+    buildParamGroup('FX', SD_FX, params, accentClass);
   }
 
   function buildParamGroup(title: string, defs: ParamDef[], params: Record<string, unknown>, accentClass: string): void {
@@ -577,52 +475,6 @@ export function createSynthPanel(): HTMLElement {
     for (const def of defs) {
       groupEl.appendChild(buildSlider(def, params, accentClass));
     }
-    content.appendChild(groupEl);
-  }
-
-  function buildCollapsibleGroup(title: string, defs: ParamDef[], params: Record<string, unknown>, accentClass: string, startOpen: boolean): void {
-    const groupEl = document.createElement('div');
-    groupEl.className = 'flex flex-col gap-0.5';
-
-    const headerRow = document.createElement('button');
-    headerRow.className = 'flex items-center gap-1 mt-0.5';
-    const arrow = document.createElement('span');
-    arrow.className = 'text-[8px] text-text-secondary/50 transition-transform';
-    arrow.textContent = '▶';
-    const gTitle = document.createElement('span');
-    gTitle.className = 'text-[9px] text-text-secondary/50 uppercase tracking-widest';
-    gTitle.textContent = title;
-    const summary = document.createElement('span');
-    summary.className = 'text-[9px] text-text-secondary/30 ml-auto';
-    headerRow.append(arrow, gTitle, summary);
-    groupEl.appendChild(headerRow);
-
-    const body = document.createElement('div');
-    body.className = 'flex flex-col gap-0.5';
-    groupEl.appendChild(body);
-
-    let open = startOpen;
-
-    function render(): void {
-      arrow.style.transform = open ? 'rotate(90deg)' : '';
-      if (open) {
-        body.innerHTML = '';
-        for (const def of defs) body.appendChild(buildSlider(def, params, accentClass));
-        body.className = 'flex flex-col gap-0.5';
-        summary.textContent = '';
-      } else {
-        body.className = 'hidden';
-        const parts: string[] = [];
-        for (const def of defs) {
-          const v = (params[def.key] as number) ?? defaultForDef(def);
-          if (v > 0) parts.push(`${def.label} ${formatValue(v, def)}`);
-        }
-        summary.textContent = parts.join(' · ') || 'off';
-      }
-    }
-
-    headerRow.addEventListener('click', () => { open = !open; render(); });
-    render();
     content.appendChild(groupEl);
   }
 

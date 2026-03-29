@@ -4,7 +4,7 @@ import { eventBus } from '../core/event-bus';
 
 export function createAiChatPanel(): HTMLElement {
   const panel = document.createElement('div');
-  panel.className = 'flex flex-col gap-2 p-3 bg-bg-surface border border-border rounded-lg min-w-[280px] max-w-[360px]';
+  panel.className = 'flex flex-col gap-2 p-3 bg-bg-surface border border-border rounded-lg min-w-[280px] max-w-[360px] h-full';
 
   // Header
   const header = document.createElement('div');
@@ -57,7 +57,7 @@ export function createAiChatPanel(): HTMLElement {
 
   // Messages container
   const messagesEl = document.createElement('div');
-  messagesEl.className = 'flex flex-col gap-2 overflow-y-auto max-h-[240px] min-h-[100px] text-xs';
+  messagesEl.className = 'flex flex-col gap-2 overflow-y-auto flex-1 min-h-[100px] text-xs';
 
   // Input area
   const inputRow = document.createElement('div');
@@ -231,7 +231,6 @@ export function createAiChatPanel(): HTMLElement {
   contextChip.className = 'flex items-center gap-1.5 px-2 py-1 bg-bg-elevated rounded border border-border text-[10px]';
 
   const CHIP_BADGE: Record<string, string> = {
-    synth: 'px-1 py-0.5 rounded bg-accent-blue/20 text-accent-blue font-bold text-[8px]',
     superdough: 'px-1 py-0.5 rounded bg-accent-purple/20 text-accent-purple font-bold text-[8px]',
     webaudiofont: 'px-1 py-0.5 rounded bg-green-400/20 text-green-400 font-bold text-[8px]',
   };
@@ -243,7 +242,7 @@ export function createAiChatPanel(): HTMLElement {
       return;
     }
     contextChip.style.display = 'flex';
-    const label = preset.engine === 'synth' ? 'FM' : preset.engine === 'superdough' ? 'SD' : 'WAF';
+    const label = preset.engine === 'superdough' ? 'SD' : 'WAF';
     contextChip.innerHTML = '';
     const working = document.createElement('span');
     working.className = 'text-text-secondary/60';
@@ -285,6 +284,12 @@ export function createAiChatPanel(): HTMLElement {
   }
 
   inputRow.append(imgBtn, fileInput, msgInput, sendBtn);
-  panel.append(header, keyToggle, keyRow, messagesEl, contextChip, quickActions, inputRow);
+
+  // Bottom section pinned to the bottom of the panel
+  const bottomSection = document.createElement('div');
+  bottomSection.className = 'flex flex-col gap-2 mt-auto';
+  bottomSection.append(contextChip, quickActions, inputRow);
+
+  panel.append(header, keyToggle, keyRow, messagesEl, bottomSection);
   return panel;
 }

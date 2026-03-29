@@ -1,29 +1,8 @@
-export type EngineType = 'synth' | 'webaudiofont' | 'superdough';
+export type EngineType = 'webaudiofont' | 'superdough';
 export type PresetCategory = 'bass' | 'pad' | 'keys' | 'lead' | 'fx' | 'orch';
 
-export interface SynthParams {
-  waveform: OscillatorType;
-  attack: number;
-  decay: number;
-  sustain: number;
-  release: number;
-  cutoff: number;
-  resonance: number;
-  detune: number;
-  voices: number;
-  gain: number;
-  fm?: number;
-  fmRatio?: number;
-  fmDecay?: number;
-  distortion?: number;
-  delayTime?: number;
-  delayFeedback?: number;
-  delayMix?: number;
-  reverbMix?: number;
-}
-
 export interface SuperDoughParams {
-  s: string; // sound: sawtooth, square, triangle, sine, supersaw, pulse, etc.
+  s: string; // sound: sawtooth, square, triangle, sine, supersaw, pulse, white, pink
   gain: number;
   attack?: number;
   decay?: number;
@@ -65,7 +44,7 @@ export interface Preset {
   category: PresetCategory;
   tags: string[];
   engine: EngineType;
-  params: SynthParams | WebAudioFontParams | SuperDoughParams;
+  params: WebAudioFontParams | SuperDoughParams;
   meta?: UserPresetMeta;
 }
 

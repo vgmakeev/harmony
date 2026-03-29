@@ -5,7 +5,6 @@ import { eventBus } from '../core/event-bus';
 
 const CATEGORIES: PresetCategory[] = ['keys', 'bass', 'pad', 'lead', 'fx', 'orch'];
 const ENGINES: { label: string; value: EngineType; color: string }[] = [
-  { label: 'FM', value: 'synth', color: 'accent-blue' },
   { label: 'SD', value: 'superdough', color: 'accent-purple' },
   { label: 'WAF', value: 'webaudiofont', color: 'green-400' },
 ];
@@ -13,19 +12,17 @@ const ENGINES: { label: string; value: EngineType; color: string }[] = [
 type SourceFilter = 'all' | 'factory' | 'user' | 'ai' | 'recent';
 
 function engineLabel(engine: EngineType): string {
-  return engine === 'synth' ? 'FM' : engine === 'superdough' ? 'SD' : 'WAF';
+  return engine === 'superdough' ? 'SD' : 'WAF';
 }
 
 // Static class maps for preset cards (avoid dynamic Tailwind)
 const CARD_ACTIVE_CLS: Record<EngineType, string> = {
-  synth: 'flex flex-col gap-0.5 p-2 rounded border text-left bg-accent-blue/10 border-accent-blue',
   superdough: 'flex flex-col gap-0.5 p-2 rounded border text-left bg-accent-purple/10 border-accent-purple',
   webaudiofont: 'flex flex-col gap-0.5 p-2 rounded border text-left bg-green-400/10 border-green-400',
 };
 const CARD_INACTIVE_CLS = 'flex flex-col gap-0.5 p-2 rounded border text-left transition-colors border-border hover:border-text-secondary/30 hover:bg-bg-elevated';
 
 const BADGE_CLS: Record<EngineType, string> = {
-  synth: 'text-[8px] px-1 py-0.5 rounded bg-accent-blue/20 text-accent-blue font-bold leading-none',
   superdough: 'text-[8px] px-1 py-0.5 rounded bg-accent-purple/20 text-accent-purple font-bold leading-none',
   webaudiofont: 'text-[8px] px-1 py-0.5 rounded bg-green-400/20 text-green-400 font-bold leading-none',
 };
@@ -459,7 +456,6 @@ export function createPresetSelector(): HTMLElement {
     }
 
     const BAR_BADGE_CLS: Record<EngineType, string> = {
-      synth: 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-accent-blue/20 text-accent-blue',
       superdough: 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-accent-purple/20 text-accent-purple',
       webaudiofont: 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-green-400/20 text-green-400',
     };
